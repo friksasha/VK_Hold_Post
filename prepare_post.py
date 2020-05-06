@@ -69,12 +69,10 @@ def separate_link(link_list, default_tag, ExcepTag):
 					split_tag.pop(0)
 					for tag in split_tag:
 						tags = tags + tag + '\n'
-					
-#Нельзя ставить \n переменной mtag. Не проходит проверка в preparing_post
 					if need_default_tag:
-						post_list.append(post_data(attachment, mtag, tags, default_tag + '\n'))
+						post_list.append(post_data(attachment, mtag + '\n', tags, default_tag + '\n'))
 					else:
-						post_list.append(post_data(attachment, mtag, tags))
+						post_list.append(post_data(attachment, mtag + '\n', tags))
 				else:
 					print('после двойного пробела идёт 3й пробел, а ожидался уже хештег')
 					wait_exit()
@@ -130,6 +128,9 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 		post.translate = '\n' + '\n' + translate_json['text'] + '\n' + '\n'
 		sheep(0.5)
 		return post
+		
+	#def print_tags(default_tag, mtag, tags):
+	#	out_text
 
 	out_post_list = []
 	fTime_list = []
@@ -186,12 +187,16 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 				if fTime_dict[fTime_list[time_id]][0] == 'usual': #работа с обычными постами
 					if not flag_no_post:
 						for i in range(len(post_list)):
-							if post_list[i].mtag not in STag_list:
+							mtag = re.sub('\n', '', post_list[i].mtag)
+							if mtag not in STag_list:
 								post = post_list.pop(i)
 								post.post_unixtime_str = str(post_unixtime)
 								out_post_list.append(post)
 								log.add_text(0, 'На время ' + post_datetime.strftime('%d.%m.%Y %H:%M') + ' обычный пост подготовлен')
 								print('На время',post_datetime.strftime('%d.%m.%Y %H:%M'),'обычный пост подготовлен')
+								log.add_text(0, "Теги поста: "+ re.sub('\n', ' ', (post.mtag + post.tags + post.default_tag)))
+								print("Теги поста:", re.sub('\n', ' ', (post.mtag + post.tags + post.default_tag)))
+								print()
 								ok = True
 								break
 							if ok: break
@@ -203,7 +208,8 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 				else: #работа с спец постами
 					for tag in fTime_dict[fTime_list[time_id]]:
 						for i in range(len(post_list)):
-							if post_list[i].mtag == tag:
+							mtag = re.sub('\n', '', post_list[i].mtag)
+							if mtag == tag:
 								post = post_list.pop(i)
 								tag_lower = post.mtag.lower()
 								if virtual != 1:
@@ -214,6 +220,9 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 								out_post_list.append(post)
 								log.add_text(0, 'На время ' + post_datetime.strftime('%d.%m.%Y %H:%M') + ' Spost подготовлен')
 								print('На время',post_datetime.strftime('%d.%m.%Y %H:%M'),'Spost подготовлен')
+								log.add_text(0, "Теги поста: "+ re.sub('\n', ' ', (post.mtag + post.tags + post.default_tag)))
+								print("Теги поста:", re.sub('\n', ' ', (post.mtag + post.tags + post.default_tag)))
+								print()
 								ok = True
 								break
 						if ok: break #А если не True, то работаем дальше
@@ -222,12 +231,16 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 						if absence_spost_act == 'usualpost':
 							if not flag_no_post:
 								for i in range(len(post_list)):
-									if post_list[i].mtag not in STag_list:
+									mtag = re.sub('\n', '', post_list[i].mtag)
+									if mtag not in STag_list:
 										post = post_list.pop(i)
 										post.post_unixtime_str = str(post_unixtime)
 										out_post_list.append(post)
 										log.add_text(2, 'На время ' + post_datetime.strftime('%d.%m.%Y %H:%M') + ' обычный пост заменил Spost.')
 										print('На время',post_datetime.strftime('%d.%m.%Y %H:%M'),'обычный пост заменил Spost. Записано в лог.')
+										log.add_text(0, "Теги поста: "+ re.sub('\n', ' ', (post.mtag + post.tags + post.default_tag)))
+										print("Теги поста:", re.sub('\n', ' ', (post.mtag + post.tags + post.default_tag)))
+										print()
 										ok = True
 										break
 									if ok: 
@@ -239,6 +252,8 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 							else:
 								log.add_text(2, 'На время ' + post_datetime.strftime('%d.%m.%Y %H:%M') + ' нет обычного поста для замены Spost.')
 								print('На время', post_datetime.strftime('%d.%m.%Y %H:%M'), 'нет обычного поста для замены Spost. Записано в лог.')
+								log.add_text(0, "Теги поста: "+ re.sub('\n', ' ', (post.mtag + post.tags + post.default_tag)))
+								print("Теги поста:", re.sub('\n', ' ', (post.mtag + post.tags + post.default_tag)))
 						elif absence_spost_act == 'skip':
 							log.add_text(2, 'Нету материалов для Spost на время ' + post_datetime.strftime('%d.%m.%Y %H:%M') + '. Время пропущено.')
 							print('Нету материалов для Spost на время', post_datetime.strftime('%d.%m.%Y %H:%M') + '. Время пропущено. Записано в лог.')
@@ -267,7 +282,7 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 
 def posting(post_data, GroupID, autor_marker, mute_notifications, token, log):
 	# Постинг переданного поста
-	post_text = post_data.translate + post_data.default_tag + (post_data.mtag + '\n') + post_data.tags
+	post_text = post_data.translate + post_data.default_tag + post_data.mtag + post_data.tags
 	url = "https://api.vk.com/method/wall.post?owner_id=-" + str(GroupID) + "&from_group=1" + "&attachments=" + post_data.attachments + "&signed=" + str(autor_marker) + "&mute_notifications="+ str(mute_notifications) + "&publish_date=" + post_data.post_unixtime_str + "&v=5.103&access_token=" + token
 	response = requests.post(url, data={'message': post_text})
 	try:	#Обработка Json_Error 
