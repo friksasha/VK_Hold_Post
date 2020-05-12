@@ -4,10 +4,16 @@
 // @description  Формирует список ссылок с тегами для зарядки очереди
 // @author       Seedmanc
 // @include      /^https?://vk.com/photo-?\d+_\d+.*$/
+// @include      /^https?://vk.com/albums-?\d+\?z=photo-?\d+_\d+.*$/
 // @require  	 https://code.jquery.com/jquery-3.5.1.slim.min.js
-// @grant GM_addStyle
+// @grant		 GM_addStyle
+// @grant		 GM_setValue
+// @grant		 GM_getValue
+// @grant		 GM_deleteValue
+// @grant		 GM_listValues
 // @noframes
 // ==/UserScript==
+'use strict';
 
 const Tags = 'kemono_friends kemurikusa translate@ hentatsu@ keifuku@';
 const Group = 'kemono_friends13th';
@@ -31,14 +37,25 @@ GM_addStyle (`
 		display: flex;
 		flex-wrap: wrap;
 		max-width: 350px;
+		max-height: 45px;
+	}
+	#link-list {
+		height: 45px;
+		box-sizing: border-box;
+	}
+	#vkh-del-button {
+		color: red;
+		max-height: 45px;
+		margin-left: 5px;
 	}
 `);
 
 const Links = {};
 
-const Wrap = $("body").append ( `<div id="vkh-wrap"></div>`).find('#vkh-wrap');
-const LinkList = Wrap.append ( `<textarea id="link-list" wrap="off" cols="50" placeholder="Список ссылок с тегами"/>` ).find('#link-list');
-const AddButtons = Wrap.append('<div id="vkh-buttons"></div>').find('#vkh-buttons');
+const Wrap = $('<div id="vkh-wrap"></div>').appendTo($("body"));
+const LinkList = $('<textarea id="link-list" wrap="off" cols="50" placeholder="Список ссылок с тегами"/>').appendTo(Wrap);
+const AddButtons = $('<div id="vkh-buttons"></div>').appendTo(Wrap);
+const DelButton = $('<button id="vkh-del-button" class="vkh-button">X</button>').appendTo(Wrap);
 
 let url = (new URLSearchParams(window.location.search)).get('z');
 
@@ -46,31 +63,56 @@ let url = (new URLSearchParams(window.location.search)).get('z');
 main()
 
 function main() {
-    'use strict';
-
 	let tags = Tags.split(' ').map(t => '#' + t);
-	url = (url ? ('vk.com/' + url.split('/')[0]) : document.location.href.match(/.+vk.com\/photo-?\d+_\d+/)[0]).replace('https://', '');
+	url = (url ?
+           ('vk.com/' + url.split('/')[0]) :
+           document.location.href.match(/.+vk.com\/photo-?\d+_\d+/)[0]
+    	).replace('https://', '');
 
 	tags.forEach(t => {
 		AddButtons.append(`<button id="vkh-${t}" class="vkh-button" data-tag="${t.replace('@', '@' + Group)}">${t}</button>`);
 	})
 
-	AddButtons.click(evt => {
-		let target = $(evt.target);
-		if (!target.is('.vkh-button')) return;
+	AddButtons.click(tagClick);
+	DelButton.click(delClick);
 
-		let tag = target.data('tag');
-		let entry = (Links[url] || {link: url, tags: new Set()});
+	loadList();
+}
 
-		if (entry.tags.has(tag))
-			entry.tags.delete(tag)
-		else
-			entry.tags.add(tag);
 
-		Links[url] = entry;
+function loadList() {
+	let storedUrls = GM_listValues();
 
-		sync(true);
+	storedUrls.forEach(key => {
+		let storedValue = GM_getValue(key);
+		Links[key] = {...storedValue, tags: new Set(storedValue.tags)};
 	});
+
+	sync(true);
+}
+
+function delClick() {
+	delete Links[url];
+	GM_deleteValue(url);
+	sync(true);
+}
+
+function tagClick(evt) {
+	let target = $(evt.target);
+	if (!target.is('.vkh-button')) return;
+
+	let tag = target.data('tag');
+	let entry = (Links[url] || {link: url, tags: new Set()});
+
+	if (entry.tags.has(tag))
+		entry.tags.delete(tag)
+	else
+		entry.tags.add(tag);
+
+	Links[url] = entry;
+	GM_setValue(url, {...entry, tags: [...entry.tags]});
+
+	sync(true);
 }
 
 function sync(out) {
@@ -79,6 +121,7 @@ function sync(out) {
 			.map(({link, tags}) => `${link}  ${[...tags].join(' ')}`).join('\n'));
 
 		$('.vkh-button').removeClass('active');
-		[...Links[url].tags].forEach(tag => $(`.vkh-button[data-tag^="${tag}"`).addClass('active'));
+		if (Links[url])
+			[...Links[url].tags].forEach(tag => AddButtons.find(`.vkh-button[data-tag^="${tag}"`).addClass('active'));
 	}
 }
