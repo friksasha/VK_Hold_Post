@@ -56,23 +56,57 @@ const ClrButton = $('<button style="color: red;" title="Удалить всё">�
 let links = {};
 let url;
 
+
 (function main() {
-    renderTagButtons();
-    updateUrl();
+	renderTagButtons();
+	updateUrl();
 
 	Wrap.click(tagClick);
 	DelButton.click(delClick);
 	ClrButton.click(clrClick);
 
 	loadList();
+	watchUrl();
 })();
 
+/**
+ * Отслеживать изменения адресной строки при переходе между картинками
+ * Нужно для обновления выбранных тегов на кнопках
+ */
+function watchUrl() { //https://stackoverflow.com/a/46428962/1202246
+	let oldHref = document.location.href;
+	let observer = new MutationObserver(mutations =>
+		mutations.forEach(() => {
+			if (oldHref != document.location.href) {
+				oldHref = document.location.href;
+				updateUrl();
+				markButtons();
+			}
+		})
+	);
 
-function renderTagButtons() {
- 	let tags = Tags.split(' ').map(t => '#' + t);
-	tags.forEach(t => TagButtons.append(`<button class="vkh-button" style="flex: 1;" data-tag="${t.replace('@', '@' + Group)}">${t}</button>`));
+	let config = {
+		childList: true,
+		subtree: true
+	};
+	observer.observe(document.body, config);
 }
 
+/**
+ * Показать кнопки добавления для указанных в настройках тегов
+ */
+function renderTagButtons() {
+ 	let tags = Tags.split(' ').map(t => '#' + t);
+	tags.forEach(t => TagButtons.append(
+		`<button class="vkh-button" style="flex: 1;" data-tag="${t.replace('@', '@' + Group)}">
+			${t}
+		</button>`)
+	);
+}
+
+/**
+ * Получить каноничный адрес картинки без протокола, выделив его из обычной или альбомной ссылки
+ */
 function updateUrl() {
     url = (new URLSearchParams(window.location.search)).get('z');
 	if (url)
@@ -81,33 +115,50 @@ function updateUrl() {
         url = document.location.href.match(/.+(vk.com\/photo-?\d+_\d+)/)[1];
 }
 
+/**
+ * Загрузить из памяти ранее сформированный список ссылок-тегов
+ */
 function loadList() {
 	let storedUrls = GM_listValues();
 
 	storedUrls.forEach(key => links[key] = GM_getValue(key));
-	sync(true);
+	sync();
 }
 
+/**
+ * Удаление строки с текущей картинкой
+ */
 function delClick() {
     updateUrl();
 	delete links[url];
 	GM_deleteValue(url);
-	sync(true);
+	sync();
 }
 
+/**
+ * Очистить весь список с подтверждением
+ * @returns {boolean} - было ли подтверждено удаление
+ */
 function clrClick() {
-	if (confirm('Очистить весь список?')) {
+	let confirmed = confirm('Очистить весь список?');
+	if (confirmed) {
 		links = {};
 		GM_listValues().forEach(key => GM_deleteValue(key));
-		sync(true);
+		sync();
 	}
+	return confirmed;
 }
 
+/**
+ * Добавить текущую картинку в список с выбранным тегом или без тега
+ * Либо убрать выбранный тег для текущей картинки, если он уже есть
+ * @param {Event} evt - событие клика. Обработчик вешается на родительский контейнер вместо каждой кнопки отдельно, затем проверяется, куда кликали
+ */
 function tagClick(evt) {
 	let target = $(evt.target);
 	if (!target.is('.vkh-button')) return;
 
-    updateUrl();
+	updateUrl();
 
 	let tag = target.data('tag');
 	let entry = links[url] || {link: url, tags: []};
@@ -121,16 +172,24 @@ function tagClick(evt) {
 	links[url] = entry;
 	GM_setValue(url, entry);
 
-	sync(true);
+	sync();
 }
 
-function sync(out) {
-	if (out) {
-		LinkList.val(Object.values(links)
-			.map(({link, tags}) => `${link}  ${tags.join(' ')}`).join('\n'));
+/**
+ * Отобразить данные из памяти на экране: обновить текстовое поле со списком и кнопки
+ */
+function sync() {
+	LinkList.val(Object.values(links)
+		.map(({link, tags}) => `${link}  ${tags.join(' ')}`).join('\n'));
 
-		$('.vkh-button').removeClass('active');
-		if (links[url])
-			links[url].tags.forEach(tag => TagButtons.find(`.vkh-button[data-tag^="${tag}"`).addClass('active'));
-	}
+	markButtons();
+}
+
+/**
+ * Пометить жирным кнопки с выбранными для текущей картинки тегами
+ */
+function markButtons() {
+	$('.vkh-button').removeClass('active');
+	if (links[url])
+		links[url].tags.forEach(tag => TagButtons.find(`.vkh-button[data-tag^="${tag}"`).addClass('active'));
 }
