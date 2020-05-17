@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name		VK hold post client
-// @version		0.2
+// @version		0.3
 // @description		Формирует список ссылок с тегами для зарядки очереди
 // @author		Seedmanc
 // @include		/^https?://vk.com/photo-?\d+_\d+.*$/
@@ -40,6 +40,9 @@ GM_addStyle (`
 		height: 45px;
 		box-sizing: border-box;
 	}
+	#link-list.vkh-error {
+		color: red;
+	}
 	#vkh-del-button {
 		margin-left: 5px;
 		font-weight: bold;
@@ -48,8 +51,8 @@ GM_addStyle (`
 
 const Wrap = $('<div id="vkh-wrap"></div>').appendTo(document.body);
 const LinkList = $('<textarea id="link-list" wrap="off" cols="53" placeholder="Список ссылок с тегами"/>').appendTo(Wrap);
-const AddButton = $('<button style="font-weight: bold;" class="vkh-button">+</button>').appendTo(Wrap);
-const TagButtons = $('<div id="vkh-buttons"></div>').appendTo(Wrap);
+const AddButton = $('<button class="vkh-button">+</button>').appendTo(Wrap);
+const TagWrap = $('<div id="vkh-buttons"></div>').appendTo(Wrap);
 const DelButton = $('<button id="vkh-del-button">&ndash;</button>').appendTo(Wrap);
 const ClrButton = $('<button style="color: red;" title="Удалить всё">╳</button>').appendTo(Wrap);
 
@@ -64,6 +67,8 @@ let url;
 	Wrap.click(tagClick);
 	DelButton.click(delClick);
 	ClrButton.click(clrClick);
+	LinkList.change(textChange);
+	LinkList.focus(loadList);
 
 	loadList();
 	watchUrl();
@@ -93,11 +98,46 @@ function watchUrl() { //https://stackoverflow.com/a/46428962/1202246
 }
 
 /**
+ * Редактирование тегов и ссылок вручную в текстовом поле
+ * Проверяет на корректность ссылку (бросает исключение при ошибке) и теги с разделителями (пытается исправить само)
+ */
+function textChange() {
+	let text = LinkList.val().trim();
+
+	if (!text || !text.split('\n').length)
+		if (!clrClick()) 
+			sync();
+
+	LinkList.removeClass('vkh-error');
+
+	try {
+		let parsed = text.split('\n').map((line, idx) => {
+			let preparsed = line.split(/\s+/);
+			let link = preparsed.shift().replace(/https?:\/\//i,'');
+			let tags = preparsed.filter(Boolean);
+
+			if (!/^vk\.com\/(photo|album|video|doc)-?\d+_\d+/i.test(link))
+				throw 'Неправильная ссылка в строке №' + (idx + 1);
+
+			tags = tags.map(tag => tag[0] != '#' ? '#' + tag : tag);
+
+			return {link, tags};
+		});
+		links = {};
+		parsed.forEach(({link, tags}) => links[link] = {link, tags});
+		sync(true);
+	} catch (e) {
+		console.error(e);
+		LinkList.addClass('vkh-error');
+	}
+}
+
+/**
  * Показать кнопки добавления для указанных в настройках тегов
  */
 function renderTagButtons() {
  	let tags = Tags.split(' ').map(t => '#' + t);
-	tags.forEach(t => TagButtons.append(
+	tags.forEach(t => TagWrap.append(
 		`<button class="vkh-button" style="flex: 1;" data-tag="${t.replace('@', '@' + Group)}">
 			${t}
 		</button>`)
@@ -108,18 +148,21 @@ function renderTagButtons() {
  * Получить каноничный адрес картинки без протокола, выделив его из обычной или альбомной ссылки
  */
 function updateUrl() {
-    url = (new URLSearchParams(window.location.search)).get('z');
-	if (url)
-        url = 'vk.com/' + url.split('/')[0]
-    else
-        url = document.location.href.match(/.+(vk.com\/photo-?\d+_\d+)/)[1];
+	url = (new URLSearchParams(window.location.search)).get('z');
+		if (url)
+			url = 'vk.com/' + url.split('/')[0]
+	else
+		url = document.location.href.match(/.+(vk.com\/photo-?\d+_\d+)/)[1];
 }
 
 /**
  * Загрузить из памяти ранее сформированный список ссылок-тегов
  */
 function loadList() {
+	if (LinkList.hasClass('vkh-error')) return;
+
 	let storedUrls = GM_listValues();
+	links = {};
 
 	storedUrls.forEach(key => links[key] = GM_getValue(key));
 	sync();
@@ -129,7 +172,7 @@ function loadList() {
  * Удаление строки с текущей картинкой
  */
 function delClick() {
-    updateUrl();
+	updateUrl();
 	delete links[url];
 	GM_deleteValue(url);
 	sync();
@@ -137,7 +180,7 @@ function delClick() {
 
 /**
  * Очистить весь список с подтверждением
- * @returns {boolean} - было ли подтверждено удаление
+ * @returns {Boolean} - было ли подтверждено удаление
  */
 function clrClick() {
 	let confirmed = confirm('Очистить весь список?');
@@ -172,17 +215,22 @@ function tagClick(evt) {
 	links[url] = entry;
 	GM_setValue(url, entry);
 
-	sync();
+	loadList();
 }
 
 /**
  * Отобразить данные из памяти на экране: обновить текстовое поле со списком и кнопки
+ * @param {Boolean} store - также отправить данные в хранилище
  */
-function sync() {
+function sync(store) {
 	LinkList.val(Object.values(links)
 		.map(({link, tags}) => `${link}  ${tags.join(' ')}`).join('\n'));
-
 	markButtons();
+
+	if (store) {
+		GM_listValues().forEach(key => GM_deleteValue(key));
+		Object.entries(links).forEach(([link, entry]) => GM_setValue(link, entry));
+	}
 }
 
 /**
@@ -190,6 +238,8 @@ function sync() {
  */
 function markButtons() {
 	$('.vkh-button').removeClass('active');
-	if (links[url])
-		links[url].tags.forEach(tag => TagButtons.find(`.vkh-button[data-tag^="${tag}"`).addClass('active'));
+	if (links[url]) {
+		AddButton.addClass('active');
+		links[url].tags.forEach(tag => TagWrap.find(`.vkh-button[data-tag^="${tag}"`).addClass('active'));
+	}
 }
