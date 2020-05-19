@@ -5,6 +5,7 @@
 // @author		Seedmanc
 // @include		/^https?://vk.com/photo-?\d+_\d+.*$/
 // @include		/^https?://vk.com/albums?-?\d+.*z=photo-?\d+_\d+.*$/
+// @include		/^https?://vk.com/albums?-?\d+(_\d+)?.*$/
 // @require		https://code.jquery.com/jquery-3.5.1.slim.min.js
 // @grant		GM_addStyle
 // @grant		GM_setValue
@@ -44,12 +45,12 @@ GM_addStyle (`
 		color: red;
 	}
 	#vkh-del-button {
-		margin-left: 5px;
+		margin-left: 4px;
 		font-weight: bold;
 	}
 `);
 
-const Wrap = $('<div id="vkh-wrap"></div>').appendTo(document.body);
+const Wrap = $('<div id="vkh-wrap" style="display: none;"></div>').appendTo(document.body);
 const LinkList = $('<textarea id="link-list" wrap="off" cols="53" placeholder="Список ссылок с тегами"/>').appendTo(Wrap);
 const AddButton = $('<button class="vkh-button">+</button>').appendTo(Wrap);
 const TagWrap = $('<div id="vkh-buttons"></div>').appendTo(Wrap);
@@ -58,7 +59,7 @@ const ClrButton = $('<button style="color: red;" title="Удалить всё">�
 
 let links = {};
 let url;
-
+const VisiblePages = [/vk.com\/photo-?\d+_\d+/, /^vk.com\/albums?-?\d+.*z=photo-?\d+_\d+/];
 
 (function main() {
 	renderTagButtons();
@@ -72,7 +73,21 @@ let url;
 
 	loadList();
 	watchUrl();
+	toggleGUI();
 })();
+
+
+/**
+ * Показывать интерфейс скрипта только на страницах с картинками
+ */
+function toggleGUI() {
+	let visible = VisiblePages.reduce((flag, regexp) => flag || regexp.test(url), false);
+
+	if (visible)
+		Wrap.show()
+	else
+		Wrap.hide();
+}
 
 /**
  * Отслеживать изменения адресной строки при переходе между картинками
@@ -85,6 +100,7 @@ function watchUrl() { //https://stackoverflow.com/a/46428962/1202246
 			if (oldHref != document.location.href) {
 				oldHref = document.location.href;
 				updateUrl();
+				toggleGUI();
 				markButtons();
 			}
 		})
@@ -105,7 +121,7 @@ function textChange() {
 	let text = LinkList.val().trim();
 
 	if (!text || !text.split('\n').length)
-		if (!clrClick()) 
+		if (!clrClick())
 			sync();
 
 	LinkList.removeClass('vkh-error');
@@ -119,7 +135,7 @@ function textChange() {
 			if (!/^vk\.com\/(photo|album|video|doc)-?\d+_\d+/i.test(link))
 				throw 'Неправильная ссылка в строке №' + (idx + 1);
 
-			tags = tags.map(tag => tag[0] != '#' ? '#' + tag : tag);
+			tags = tags.map(tag => (tag[0] != '#' ? '#' + tag : tag).replace(/@$/, '@' + Group));
 
 			return {link, tags};
 		});
@@ -149,10 +165,12 @@ function renderTagButtons() {
  */
 function updateUrl() {
 	url = (new URLSearchParams(window.location.search)).get('z');
-		if (url)
-			url = 'vk.com/' + url.split('/')[0]
+	let matched = document.location.href.match(/.+(vk.com\/photo-?\d+_\d+)/);
+
+	if (url)
+		url = 'vk.com/' + url.split('/')[0]
 	else
-		url = document.location.href.match(/.+(vk.com\/photo-?\d+_\d+)/)[1];
+		url = matched && matched[1];
 }
 
 /**
