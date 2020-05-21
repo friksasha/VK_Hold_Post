@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name		VK hold post client
-// @version		0.3
+// @version		0.4
 // @description		Формирует список ссылок с тегами для зарядки очереди
 // @author		Seedmanc
 // @include		/^https?://vk.com/photo-?\d+_\d+.*$/
@@ -16,8 +16,12 @@
 // ==/UserScript==
 'use strict';
 
-const Tags = 'kemono_friends kemurikusa cosplay translate@ hentatsu@ keifuku@';
-const Group = 'kemono_friends13th';
+// <Настройки>
+let TAGS = 'kemono_friends kemurikusa cosplay translate@ hentatsu@ keifuku@'; // все теги
+let STAGS = 'cosplay translate@';
+const GROUP = 'kemono_friends13th';
+const POSTS = 6; // постов с обычными тегами в день
+// </Настройки>
 
 
 GM_addStyle (`
@@ -48,10 +52,26 @@ GM_addStyle (`
 		margin-left: 4px;
 		font-weight: bold;
 	}
+	#vkh-stats {
+		background: lightgrey;
+   		height: 45px;
+	}
+	#line-count {
+		position: absolute;
+		bottom: 0.3em;
+		right: 0.25em;
+		pointer-events: none;
+	}
 `);
 
 const Wrap = $('<div id="vkh-wrap" style="display: none;"></div>').appendTo(document.body);
-const LinkList = $('<textarea id="link-list" wrap="off" cols="53" placeholder="Список ссылок с тегами"/>').appendTo(Wrap);
+const Stats = $(`<table id="vkh-stats">
+	<tr><td title="Обычных / Специальных постов">Заполнено дней (О/С):</td>	<th id="vkh-complete"></th></tr>
+	<tr><td title="Обычных / Специальных слотов в незаполненных днях">Пустых слотов (О/С):</td>	<th id="vkh-missing"></th></tr>
+</table>`).appendTo(Wrap);
+const LinkList = $(`<div style="height: 100%; position: relative;">
+	<textarea id="link-list" wrap="off" cols="53" placeholder="Список ссылок с тегами"></textarea> <b id="line-count"></b>
+</div>`).appendTo(Wrap).find('#link-list');
 const AddButton = $('<button class="vkh-button">+</button>').appendTo(Wrap);
 const TagWrap = $('<div id="vkh-buttons"></div>').appendTo(Wrap);
 const DelButton = $('<button id="vkh-del-button">&ndash;</button>').appendTo(Wrap);
@@ -62,6 +82,9 @@ let url;
 const VisiblePages = [/vk.com\/photo-?\d+_\d+/, /^vk.com\/albums?-?\d+.*z=photo-?\d+_\d+/];
 
 (function main() {
+	TAGS = formatTags(TAGS);
+	STAGS = formatTags(STAGS);
+
 	renderTagButtons();
 	updateUrl();
 
@@ -135,7 +158,7 @@ function textChange() {
 			if (!/^vk\.com\/(photo|album|video|doc)-?\d+_\d+/i.test(link))
 				throw 'Неправильная ссылка в строке №' + (idx + 1);
 
-			tags = tags.map(tag => (tag[0] != '#' ? '#' + tag : tag).replace(/@$/, '@' + Group));
+			tags = formatTags(tags);
 
 			return {link, tags};
 		});
@@ -149,13 +172,24 @@ function textChange() {
 }
 
 /**
+ * Дополнить теги # в начале и названием группы после @ в конце
+ * @param {String|Array} tagList - список тегов строкой либо массив строк
+ * @returns {Array<String>} - массив дополненных тегов
+ */
+function formatTags(tagList) {
+	let array = typeof tagList == 'string' ?
+		tagList.split(/\s+/) :
+		tagList;
+    return array.map(t => (t[0] != '#' ? '#' + t : t).replace(/@$/, '@' + GROUP));
+}
+
+/**
  * Показать кнопки добавления для указанных в настройках тегов
  */
 function renderTagButtons() {
- 	let tags = Tags.split(' ').map(t => '#' + t);
-	tags.forEach(t => TagWrap.append(
-		`<button class="vkh-button" style="flex: 1;" data-tag="${t.replace('@', '@' + Group)}">
-			${t}
+	TAGS.forEach(t => TagWrap.append(
+		`<button class="vkh-button" style="flex: 1;${STAGS.includes(t) ? ' text-decoration: underline;' : ''}" data-tag="${t}">
+			${t.replace(/@.+$/, '@')}
 		</button>`)
 	);
 }
@@ -244,6 +278,7 @@ function sync(store) {
 	LinkList.val(Object.values(links)
 		.map(({link, tags}) => `${link}  ${tags.join(' ')}`).join('\n'));
 	markButtons();
+	countPosts();
 
 	if (store) {
 		GM_listValues().forEach(key => GM_deleteValue(key));
@@ -260,4 +295,31 @@ function markButtons() {
 		AddButton.addClass('active');
 		links[url].tags.forEach(tag => TagWrap.find(`.vkh-button[data-tag^="${tag}"`).addClass('active'));
 	}
+}
+
+/**
+ * Показать статистику по заполненным постами дням и пустующим слотам с учётом категории тегов 
+ */
+function countPosts() {
+	let lines = Object.values(links);
+	let regularPosts = lines.filter(el => !el.tags.find(tag => STAGS.includes(tag)));
+	let fullRegular = Math.trunc(regularPosts.length / POSTS);
+	let remainingRegular = POSTS - (regularPosts.length % POSTS || POSTS);
+
+	let specialPosts = lines.filter(el => el.tags.find(tag => STAGS.includes(tag)));
+	let stats = {};
+	STAGS.forEach(tag => {	//TODO  два спецтега в одном посте не должны давать +1 к каждому тегу
+		stats[tag] = stats[tag] || 0;
+		specialPosts		// подсчитывается количество постов по каждому спецтегу, полными днями считаются те, где есть посты с каждым тегом
+			.filter(post => post.tags.includes(tag))
+			.forEach(post => stats[tag]++)
+	});
+
+	let fullSpecial = Math.min(...Object.values(stats));
+	let maxSpecial = Math.max(...Object.values(stats));		// пустующие слоты подсчитываются, как количество недостающих до заполнения
+	let remainingSpecial = Object.values(stats).reduce((sum, current) => sum + maxSpecial - current, 0);
+
+	Wrap.find('#line-count').text(lines.length);
+	Stats.find('#vkh-complete').text(`${fullRegular}/${fullSpecial}`).css('color', fullRegular == fullSpecial ? 'currentColor' : 'orangered');
+	Stats.find('#vkh-missing').text(`${remainingRegular}/${remainingSpecial}`).css('color', remainingRegular + remainingSpecial == 0 ? 'currentColor' : 'orangered');
 }
