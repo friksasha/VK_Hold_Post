@@ -62,6 +62,9 @@ GM_addStyle (`
 		right: 0.25em;
 		pointer-events: none;
 	}
+	.suggested {
+		color: darkcyan;
+	}
 `);
 
 const Wrap = $('<div id="vkh-wrap" style="display: none;"></div>').appendTo(document.body);
@@ -124,7 +127,7 @@ function watchUrl() { //https://stackoverflow.com/a/46428962/1202246
 				oldHref = document.location.href;
 				updateUrl();
 				toggleGUI();
-				markButtons();
+				sync();
 			}
 		})
 	);
@@ -180,7 +183,9 @@ function formatTags(tagList) {
 	let array = typeof tagList == 'string' ?
 		tagList.split(/\s+/) :
 		tagList;
-    return array.map(t => (t[0] != '#' ? '#' + t : t).replace(/@$/, '@' + GROUP));
+	return array
+		.map(t => (t[0] != '#' ? '#' + t : t).replace(/@$/, '@' + GROUP))
+		.sort((e1,e2) => STAGS.includes(e2) - STAGS.includes(e1));
 }
 
 /**
@@ -264,6 +269,7 @@ function tagClick(evt) {
 		else
 			entry.tags.push(tag);
 
+	entry.tags.sort((e1,e2) => STAGS.includes(e2) - STAGS.includes(e1));
 	links[url] = entry;
 	GM_setValue(url, entry);
 
@@ -277,8 +283,7 @@ function tagClick(evt) {
 function sync(store) {
 	LinkList.val(Object.values(links)
 		.map(({link, tags}) => `${link}  ${tags.join(' ')}`).join('\n'));
-	markButtons();
-	countPosts();
+	markButtons(countPosts());
 
 	if (store) {
 		GM_listValues().forEach(key => GM_deleteValue(key));
@@ -288,17 +293,23 @@ function sync(store) {
 
 /**
  * Пометить жирным кнопки с выбранными для текущей картинки тегами
+ * @param {Object, Object} - статистика по спецтегам для пометки недостающих для заполнения
  */
-function markButtons() {
-	$('.vkh-button').removeClass('active');
+function markButtons({stats, maxSpecial}) {
+	$('.vkh-button').removeClass('active suggested');
+	let suggestedTags = Object.keys(stats).filter(tag => stats[tag] < maxSpecial);
+
 	if (links[url]) {
 		AddButton.addClass('active');
 		links[url].tags.forEach(tag => TagWrap.find(`.vkh-button[data-tag^="${tag}"`).addClass('active'));
+        suggestedTags = suggestedTags.filter(tag => !links[url].tags.find(t => STAGS.includes(t)));
 	}
+	suggestedTags.forEach(tag => TagWrap.find(`.vkh-button[data-tag^="${tag}"`).addClass('suggested'));
 }
 
 /**
- * Показать статистику по заполненным постами дням и пустующим слотам с учётом категории тегов 
+ * Показать статистику по заполненным постами дням и пустующим слотам с учётом категории тегов
+ * @returns {Object} - статистика для использования в маркировке кнопок
  */
 function countPosts() {
 	let lines = Object.values(links);
@@ -308,10 +319,10 @@ function countPosts() {
 
 	let specialPosts = lines.filter(el => el.tags.find(tag => STAGS.includes(tag)));
 	let stats = {};
-	STAGS.forEach(tag => {	//TODO  два спецтега в одном посте не должны давать +1 к каждому тегу
+	STAGS.forEach(tag => {
 		stats[tag] = stats[tag] || 0;
 		specialPosts		// подсчитывается количество постов по каждому спецтегу, полными днями считаются те, где есть посты с каждым тегом
-			.filter(post => post.tags.includes(tag))
+			.filter(post => post.tags[0] == tag)
 			.forEach(post => stats[tag]++)
 	});
 
@@ -322,4 +333,6 @@ function countPosts() {
 	Wrap.find('#line-count').text(lines.length);
 	Stats.find('#vkh-complete').text(`${fullRegular}/${fullSpecial}`).css('color', fullRegular == fullSpecial ? 'currentColor' : 'orangered');
 	Stats.find('#vkh-missing').text(`${remainingRegular}/${remainingSpecial}`).css('color', remainingRegular + remainingSpecial == 0 ? 'currentColor' : 'orangered');
+
+	return {stats, maxSpecial};
 }
