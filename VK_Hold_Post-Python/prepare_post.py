@@ -320,7 +320,7 @@ def init(cfg, log):
 	postponed_times = get_postponed_times(cfg.GroupID, cfg.token)
 	post_list = preparing_post(post_list, postponed_times, cfg.Time_dict, cfg.start_date, cfg.start_time, cfg.virtual, cfg.STag_list, cfg.STimeTag_dict, cfg.conflict_time_act, cfg.absence_spost_act, cfg.token, log)
 	log.add_text(0, "Постинг")
-	print()
+	input("Проверьте корректность планируемого постинга и нажмите Ввод для продолжения")
 	for i in range(len(post_list)):
 		posting(post_list[i], cfg.GroupID, cfg.autor_marker, cfg.mute_notifications, cfg.token, log)
 		sheep(1)
