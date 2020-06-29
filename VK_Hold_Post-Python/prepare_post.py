@@ -252,7 +252,6 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 										print('На время', post_datetime.strftime('%d.%m.%Y %H:%M'), 'нет обычного поста для замены Spost. Записано в лог.')
 										log.add_text(0, "Ожидался пост тегом из списка: " + ', '.join(fTime_dict[post_datetime.time()]))
 										print("Ожидался пост тегом из списка:", ', '.join(fTime_dict[post_datetime.time()]))
-										print(*fTime_dict[post_datetime.time()], sep=', ')
 							else:
 								log.add_text(2, 'На время ' + post_datetime.strftime('%d.%m.%Y %H:%M') + ' нет обычного поста для замены Spost.')
 								print('На время', post_datetime.strftime('%d.%m.%Y %H:%M'), 'нет обычного поста для замены Spost. Записано в лог.')
