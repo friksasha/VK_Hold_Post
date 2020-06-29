@@ -149,7 +149,7 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 		if fTime_list[i] == start_time:
 			time_id = i
 			break
-	
+	'''
 	#Пока в массиве post_list есть значения, то работаем
 		#Берём время
 			#Собираем датавремя и проверяем есть такое уже в запланированном
@@ -177,7 +177,8 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 				#Если cпец поста не оказалось и указан параметр skip, то пропускаем и пишем об этом
 				#Если cпец поста не оказалось и указан параметр stop, то прекращаем работу и пишем об этом
 		#Переходим к следующему времени пока не дойдём до конца
-		
+	'''	
+	
 	while len(post_list) > 0:
 		while time_id < len(fTime_list):
 			ok = False
@@ -249,11 +250,14 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 										flag_no_post = True
 										log.add_text(2, 'На время ' + post_datetime.strftime('%d.%m.%Y %H:%M') + ' нет обычного поста для замены Spost.')
 										print('На время', post_datetime.strftime('%d.%m.%Y %H:%M'), 'нет обычного поста для замены Spost. Записано в лог.')
+										log.add_text(0, "Ожидался пост тегом из списка: " + ', '.join(fTime_dict[post_datetime.time()]))
+										print("Ожидался пост тегом из списка:", ', '.join(fTime_dict[post_datetime.time()]))
+										print(*fTime_dict[post_datetime.time()], sep=', ')
 							else:
 								log.add_text(2, 'На время ' + post_datetime.strftime('%d.%m.%Y %H:%M') + ' нет обычного поста для замены Spost.')
 								print('На время', post_datetime.strftime('%d.%m.%Y %H:%M'), 'нет обычного поста для замены Spost. Записано в лог.')
-								log.add_text(0, "Теги поста: "+ re.sub('\n', ' ', (post.mtag + post.tags + post.default_tag)))
-								print("Теги поста:", re.sub('\n', ' ', (post.mtag + post.tags + post.default_tag)))
+								log.add_text(0, "Ожидался пост тегом из списка: " + ', '.join(fTime_dict[post_datetime.time()]))
+								print("Ожидался пост тегом из списка:", ', '.join(fTime_dict[post_datetime.time()]))
 						elif absence_spost_act == 'skip':
 							log.add_text(2, 'Нету материалов для Spost на время ' + post_datetime.strftime('%d.%m.%Y %H:%M') + '. Время пропущено.')
 							print('Нету материалов для Spost на время', post_datetime.strftime('%d.%m.%Y %H:%M') + '. Время пропущено. Записано в лог.')
@@ -263,7 +267,7 @@ def preparing_post(post_list, postponed_times ,Time_dict, start_date, start_time
 			else:
 				if conflict_time_act == 'nexttime':
 					log.add_text(2, "Время " + post_datetime.strftime('%d.%m.%Y %H:%M')+ " уже занято.")
-					print("Время",post_datetime.strftime('%d.%m.%Y %H:%M'),"уже занято. Записано в лог.")
+					print("Время",post_datetime.strftime('%d.%m.%Y %H:%M'),"уже занято. Записано в лог.", end='\n\n')
 					pass
 				elif conflict_time_act == 'stop':
 					print("Время",post_datetime.strftime('%d.%m.%Y %H:%M'),"уже занято")
@@ -323,7 +327,7 @@ def init(cfg, log):
 	input("Проверьте корректность планируемого постинга и нажмите Ввод для продолжения")
 	for i in range(len(post_list)):
 		posting(post_list[i], cfg.GroupID, cfg.autor_marker, cfg.mute_notifications, cfg.token, log)
-		sheep(1)
+		sheep(0.5)
 	log.write_to_file()
 	#print_list(post_list)
 

@@ -15,7 +15,7 @@ import init
 import prepare_post
 
 def wait_exit():
-	input("Press Enter to exit...")
+	input("Нажмите Enter для выхода...")
 	exit()
 
 def main():	

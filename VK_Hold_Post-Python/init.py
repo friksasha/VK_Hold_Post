@@ -72,7 +72,7 @@ class VKConfig:
 			if not os.path.exists(path):
 				print('Не найден файл конфига. Пожалуйста восстановите его из копии.')
 				wait_exit()	
-			config.read(path)
+			config.read(path, encoding='utf-8')
 			try:
 			# Читаем конфиг
 				self.Source_type  = config.get("Main", "Source_type")
@@ -495,14 +495,14 @@ class log_kit:
 	
 	def write_to_file(self):
 		if os.path.exists(self.path):
-			file = open(self.path, 'a')
+			file = open(self.path, 'a', encoding='utf8')
 			file.write('\n')
 			for i in self.log:
 				file.write(i)
 			file.close()
 			print('Лог записан')
 		else:
-			file = open(self.path, 'w')
+			file = open(self.path, 'w', encoding='utf8')
 			for i in self.log:
 				file.write(i)
 			file.close()
