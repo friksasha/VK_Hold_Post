@@ -27,7 +27,8 @@ const TOKEN = '';
 
 
 GM_addStyle (`
-	#vkh-wrap {
+	#vkh-wrap,
+	#vkh-scroll {
 		position:  fixed;
 		display: flex;
 		top:       0px;
@@ -87,6 +88,7 @@ GM_addStyle (`
 	}
 `);
 
+const Scroll = $('<button id="vkh-scroll">↓</button>').appendTo(document.body);
 const Wrap = $('<div id="vkh-wrap" style="display: none;"></div>').appendTo(document.body);
 const Stats = $(`<table id="vkh-stats">
 	<tr><td title="Обычных / Специальных постов">Заполнено дней (О/С):</td>	<th id="vkh-complete"></th></tr>
@@ -102,7 +104,7 @@ const ClrButton = $('<button style="color: red;" title="Удалить всё">�
 const ImagesWrap = $('<div id="images-wrap"></div>').appendTo(Wrap);
 
 let links = {};
-let url;
+let url, timer;
 const VisiblePages = [/vk.com\/photo-?\d+_\d+/, /vk.com\/video-?\d+_\d+/, /^vk.com\/albums?-?\d+.*z=photo-?\d+_\d+/];
 
 (function main() {
@@ -118,6 +120,7 @@ const VisiblePages = [/vk.com\/photo-?\d+_\d+/, /vk.com\/video-?\d+_\d+/, /^vk.c
 	LinkList.change(textChange);
 	LinkList.focus(loadList);
 	ImagesWrap.click(removeImage);
+	Scroll.click(() => scrollClick(true));
 
 	loadList();
 	watchUrl();
@@ -126,7 +129,8 @@ const VisiblePages = [/vk.com\/photo-?\d+_\d+/, /vk.com\/video-?\d+_\d+/, /^vk.c
 	document.addEventListener('visibilitychange', () => {
 		if (!document.hidden) {
 			loadList();
-			renderImages();
+			if (!$('#images-wrap a').length)
+				renderImages();
 		}
 	});
 
@@ -140,10 +144,13 @@ const VisiblePages = [/vk.com\/photo-?\d+_\d+/, /vk.com\/video-?\d+_\d+/, /^vk.c
 function toggleGUI() {
 	let visible = VisiblePages.reduce((flag, regexp) => flag || regexp.test(url), false);
 
-	if (visible)
-		Wrap.show()
-	else
+	if (visible) {
+		Scroll.hide();
+		Wrap.show();
+	} else {
+		Scroll.show();
 		Wrap.hide();
+	}
 }
 
 /**
@@ -276,8 +283,13 @@ function delClick() {
  * @returns {Boolean} - было ли подтверждено удаление
  */
 function clrClick() {
+	if (!Object.keys(links).length) return;
+
 	let confirmed = confirm('Очистить весь список?');
 	if (confirmed) {
+		let lastId = Object.keys(links).sort().reverse()[0].split('photo')[1];
+		localStorage.vkhLastId = lastId;
+
 		links = {};
 		GM_listValues().forEach(key => GM_deleteValue(key));
 		sync();
@@ -380,8 +392,8 @@ function countPosts() {
  */
 function renderImages() {
 	let ids = LinkList.val().trim().split('\n').filter(link => link && !link.includes('video')).map(link => link.split('/').reverse()[0].match(/-?\d+_\d+/)[0]);
-	if (!ids.length) return;
 	ImagesWrap.html('');
+	if (!ids.length || document.hidden) return;
 
 	fetch(`https://api.vk.com/method/photos.getById?photos=${ids.join(',')}&v=5.52&access_token=${TOKEN}&extended=0&photo_sizes=0`)
 		.then(result => result.json())
@@ -425,4 +437,28 @@ function moveToAlbum(images, album = 261695682) {
 		await console.log(await moveImage(imgs[i]))
 		await sleep(667);
 	}})(imgs)
+}
+
+/**
+ * Найти, где остановились с постингом последний раз в общем списке картинок
+ * @param {Boolean} stop - прекратить поиск
+ */
+function scrollClick(stop) {
+	let lastId = localStorage.vkhLastId;
+	if (!lastId) return;
+	let found = document.querySelector(`[data-id="${lastId}"]`);
+
+	if (stop && timer) {
+		window.clearTimeout(timer);
+		timer = null;
+		return;
+	}
+
+	if (found) {
+		found.scrollIntoView();
+		$(found).css({border:'2px solid #f0f'});
+	} else {
+		window.scrollTo(0, document.body.scrollHeight);
+		timer = setTimeout(scrollClick, 500);
+	}
 }
