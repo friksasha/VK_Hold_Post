@@ -190,14 +190,14 @@ class VKConfig:
 						tmp_list = list(self.Time_dict.keys()) + list(self.STimeTag_dict.keys())
 						tmp_list.sort()
 						for time in tmp_list:
-							if time > (datetime.datetime.now() + datetime.timedelta(minutes = 5)).time() :
+							if time > (datetime.datetime.now() + datetime.timedelta(minutes = 2)).time() :
 								self.start_time = time
 								print("Постинг начнётся с сегодня", time)
 								break
 						if self.start_time == None:
 							self.start_time = tmp_list[0]
 							self.start_date += datetime.timedelta(days = 1)
-							print("Сегодня всё время для постинга уже прошедшее или до последнего времени менее 5 минут.")
+							print("Сегодня всё время для постинга уже прошедшее или до последнего времени менее 2 минут.")
 							print("Постинг начнётся с завтра", self.start_time)
 					else:
 						tmp_list = list(self.Time_dict.keys()) + list(self.STimeTag_dict.keys())
