@@ -1,10 +1,9 @@
 // ==UserScript==
 // @name		VK hold post client
-// @version		0.6
+// @version		0.4
 // @description		Формирует список ссылок с тегами для зарядки очереди
 // @author		Seedmanc
 // @include		/^https?://vk.com/photo-?\d+_\d+.*$/
-// @include		/^https?://vk.com/video-?\d+_\d+.*$/
 // @include		/^https?://vk.com/albums?-?\d+.*z=photo-?\d+_\d+.*$/
 // @include		/^https?://vk.com/albums?-?\d+(_\d+)?.*$/
 // @require		https://code.jquery.com/jquery-3.5.1.slim.min.js
@@ -18,11 +17,10 @@
 'use strict';
 
 // <Настройки>
-let TAGS = 'kemono_friends kemurikusa cosplay mmd translate@ hentatsu@ keifuku@'; // все теги
-let STAGS = 'cosplay translate@'; // подмножество всех
+let TAGS = 'kemono_friends kemurikusa cosplay translate@ hentatsu@ keifuku@'; // все теги
+let STAGS = 'cosplay translate@';
 const GROUP = 'kemono_friends13th';
 const POSTS = 6; // постов с обычными тегами в день
-const TOKEN = '';
 // </Настройки>
 
 
@@ -57,7 +55,6 @@ GM_addStyle (`
 	#vkh-stats {
 		background: lightgrey;
    		height: 45px;
-		min-width: 168px;
 	}
 	#line-count {
 		position: absolute;
@@ -67,23 +64,6 @@ GM_addStyle (`
 	}
 	.suggested {
 		color: darkcyan;
-	}
-	#images-wrap {
-		margin-left: 4px;
-	}
-	#images-wrap img {
-		width: 45px;
-		height: 45px;
-		margin-left: 1px;
-	}
-	#images-wrap a {
-		position: relative;
-		display: inline-block;
-	}
-	#images-wrap .vkh-remove {
-		position: absolute;
-		right: 0;
-		color: red;
 	}
 `);
 
@@ -99,11 +79,10 @@ const AddButton = $('<button class="vkh-button">+</button>').appendTo(Wrap);
 const TagWrap = $('<div id="vkh-buttons"></div>').appendTo(Wrap);
 const DelButton = $('<button id="vkh-del-button">&ndash;</button>').appendTo(Wrap);
 const ClrButton = $('<button style="color: red;" title="Удалить всё">╳</button>').appendTo(Wrap);
-const ImagesWrap = $('<div id="images-wrap"></div>').appendTo(Wrap);
 
 let links = {};
 let url;
-const VisiblePages = [/vk.com\/photo-?\d+_\d+/, /vk.com\/video-?\d+_\d+/, /^vk.com\/albums?-?\d+.*z=photo-?\d+_\d+/];
+const VisiblePages = [/vk.com\/photo-?\d+_\d+/, /^vk.com\/albums?-?\d+.*z=photo-?\d+_\d+/];
 
 (function main() {
 	TAGS = formatTags(TAGS);
@@ -117,20 +96,10 @@ const VisiblePages = [/vk.com\/photo-?\d+_\d+/, /vk.com\/video-?\d+_\d+/, /^vk.c
 	ClrButton.click(clrClick);
 	LinkList.change(textChange);
 	LinkList.focus(loadList);
-	ImagesWrap.click(removeImage);
 
 	loadList();
 	watchUrl();
 	toggleGUI();
-
-	document.addEventListener('visibilitychange', () => {
-		if (!document.hidden) {
-			loadList();
-			renderImages();
-		}
-	});
-
-	unsafeWindow.moveToAlbum = moveToAlbum;
 })();
 
 
@@ -177,14 +146,14 @@ function watchUrl() { //https://stackoverflow.com/a/46428962/1202246
 function textChange() {
 	let text = LinkList.val().trim();
 
-	if (!text || !text.split('\n').filter(Boolean).length) {
-	 	ImagesWrap.html('');
-	}
+	if (!text || !text.split('\n').length)
+		if (!clrClick())
+			sync();
 
 	LinkList.removeClass('vkh-error');
 
 	try {
-		let parsed = text.split('\n').filter(Boolean).map((line, idx) => {
+		let parsed = text.split('\n').map((line, idx) => {
 			let preparsed = line.split(/\s+/);
 			let link = preparsed.shift().replace(/https?:\/\//i,'');
 			let tags = preparsed.filter(Boolean);
@@ -199,7 +168,6 @@ function textChange() {
 		links = {};
 		parsed.forEach(({link, tags}) => links[link] = {link, tags});
 		sync(true);
-		renderImages();
 	} catch (e) {
 		console.error(e);
 		LinkList.addClass('vkh-error');
@@ -236,15 +204,12 @@ function renderTagButtons() {
  */
 function updateUrl() {
 	url = (new URLSearchParams(window.location.search)).get('z');
-	let matched = document.location.href.match(/.+(vk.com\/(photo|video)-?\d+_\d+)/);
+	let matched = document.location.href.match(/.+(vk.com\/photo-?\d+_\d+)/);
 
 	if (url)
 		url = 'vk.com/' + url.split('/')[0]
 	else
 		url = matched && matched[1];
-
-	if (/vk\.com\/im/.test(window.location.href))
-		url = null;
 }
 
 /**
@@ -268,7 +233,6 @@ function delClick() {
 	delete links[url];
 	GM_deleteValue(url);
 	sync();
-	renderImages();
 }
 
 /**
@@ -281,7 +245,6 @@ function clrClick() {
 		links = {};
 		GM_listValues().forEach(key => GM_deleteValue(key));
 		sync();
-		ImagesWrap.html('');
 	}
 	return confirmed;
 }
@@ -311,7 +274,6 @@ function tagClick(evt) {
 	GM_setValue(url, entry);
 
 	loadList();
-	renderImages();
 }
 
 /**
@@ -373,56 +335,4 @@ function countPosts() {
 	Stats.find('#vkh-missing').text(`${remainingRegular}/${remainingSpecial}`).css('color', remainingRegular + remainingSpecial == 0 ? 'currentColor' : 'orangered');
 
 	return {stats, maxSpecial};
-}
-
-/**
- * Показать превью для списка ссылок (только картинки)
- */
-function renderImages() {
-	let ids = LinkList.val().trim().split('\n').filter(link => link && !link.includes('video')).map(link => link.split('/').reverse()[0].match(/-?\d+_\d+/)[0]);
-	if (!ids.length) return;
-	ImagesWrap.html('');
-
-	fetch(`https://api.vk.com/method/photos.getById?photos=${ids.join(',')}&v=5.52&access_token=${TOKEN}&extended=0&photo_sizes=0`)
-		.then(result => result.json())
-		.then(r => r.response.forEach(({id, owner_id, photo_75}) => {
-			ImagesWrap.append($(`<a href="photo${owner_id}_${id}"><img src="${photo_75}"/><b class="vkh-remove">╳</b></a>`));
-		}));
-}
-
-/**
- * Удалить ссылку по превью
- */
-function removeImage(evt) {
-	if ($(evt.target).is('.vkh-remove')) {
-		let list = LinkList.val().trim().split('\n');
-		let indexToRemove = list.findIndex(line => line.includes($(evt.target).parents('a').attr('href')));
-		list.splice(indexToRemove, 1)
-		LinkList.val(list.join('\n'));
-		textChange();
-		return false;
-	}
-}
-
-
-/**
- * Переместить набор изображений в альбом
- * @param {String} images - список ссылок на картинки, разделенный переносами строк
- * @param {Number} album - айди альбома, по умолчанию Sandstar Pit
- */
-function moveToAlbum(images, album = 261695682) {
-	let imgs = images.split('\n').map(el => el.trim().split('_')[1]);
-
-	async function moveImage(id) {
-		return await fetch(`https://api.vk.com/method/photos.move?access_token=${TOKEN}&v=5.110&owner_id=-159234408&target_album_id=${album}&photo_id=${id}`)
-	}
-
-	const sleep = ms => {
-		return new Promise(resolve => setTimeout(resolve, ms))
-	}
-
-	(async (imgs) => {for(let i=0; i<imgs.length; i++) {
-		await console.log(await moveImage(imgs[i]))
-		await sleep(667);
-	}})(imgs)
 }
