@@ -148,8 +148,9 @@ function toggleGUI() {
 		Scroll.hide();
 		Wrap.show();
 	} else {
-		Scroll.show();
 		Wrap.hide();
+		if (document.location.href.includes('albums'))
+			Scroll.show();
 	}
 }
 
@@ -287,8 +288,12 @@ function clrClick() {
 
 	let confirmed = confirm('Очистить весь список?');
 	if (confirmed) {
-		let lastId = Object.keys(links).sort().reverse()[0].split('photo')[1];
-		localStorage.vkhLastId = lastId;
+		let lastId = Object.values(links)
+			.filter(el => !el.tags.includes('#cosplay'))
+			.filter(el => !el.tags.includes('#translate@'+GROUP))
+			.map(el => el.link)
+			.sort().reverse()[0].split('photo')[1];
+		if (document.location.href.includes('albums')) localStorage.vkhLastId = lastId;
 
 		links = {};
 		GM_listValues().forEach(key => GM_deleteValue(key));
