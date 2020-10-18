@@ -23,6 +23,7 @@ let STAGS = 'cosplay translate@'; // подмножество всех
 const GROUP = 'kemono_friends13th';
 const POSTS = 6; // постов с обычными тегами в день
 const TOKEN = '';
+const LIKE_LIMIT = 16; // считать запощённой картинку с лайками выше этого значения
 // </Настройки>
 
 
@@ -32,8 +33,31 @@ GM_addStyle (`
 		position:  fixed;
 		display: flex;
 		top:       0px;
-		z-index:   500;
+		z-index:   501;
 		max-height: 45px;
+	}
+	#vkh-wrap #vkh-toggle:checked ~ * {
+		display: none;
+	}
+	#vkh-toggle, .vkh-toggle {
+		position: absolute;
+		left: 1rem;
+		top: 1rem;
+	}
+	.vkh-posted {
+		outline: 2px solid #00f;
+		outline-offset: -3px;
+	}
+	.vkh-posted img {
+		opacity: 0.66;
+	}
+	.vkh-posted b.vkh-remove {
+		color: yellow;
+		text-shadow: 0 0 2px black;
+	}
+	.vkh-toggle {
+		left: 2.5rem;
+		top: 1.15rem;
 	}
 	.vkh-button.active {
 		font-weight: bold;
@@ -73,23 +97,25 @@ GM_addStyle (`
 		margin-left: 4px;
 	}
 	#images-wrap img {
-		width: 45px;
-		height: 45px;
+		width: 75px;
+		height: 75px;
 		margin-left: 1px;
+		margin-bottom: -1px;
 	}
 	#images-wrap a {
 		position: relative;
 		display: inline-block;
 	}
-	#images-wrap .vkh-remove {
+	.vkh-remove {
 		position: absolute;
 		right: 0;
 		color: red;
 	}
 `);
 
-const Scroll = $('<button id="vkh-scroll">↓</button>').appendTo(document.body);
+const Scroll = $('<button id="vkh-scroll" style="display:none;">↓</button>').appendTo(document.body);
 const Wrap = $('<div id="vkh-wrap" style="display: none;"></div>').appendTo(document.body);
+const Toggle = $('<label class="vkh-toggle" for="vkh-toggle">hide</label><input type="checkbox" id="vkh-toggle"/>').appendTo(Wrap);
 const Stats = $(`<table id="vkh-stats">
 	<tr><td title="Обычных / Специальных постов">Заполнено дней (О/С):</td>	<th id="vkh-complete"></th></tr>
 	<tr><td title="Обычных / Специальных слотов в незаполненных днях">Пустых слотов (О/С):</td>	<th id="vkh-missing"></th></tr>
@@ -144,8 +170,8 @@ const VisiblePages = [/vk.com\/photo-?\d+_\d+/, /vk.com\/video-?\d+_\d+/, /^vk.c
 function toggleGUI() {
 	let visible = VisiblePages.reduce((flag, regexp) => flag || regexp.test(url), false);
 
+	Scroll.hide();
 	if (visible) {
-		Scroll.hide();
 		Wrap.show();
 	} else {
 		Wrap.hide();
@@ -400,10 +426,14 @@ function renderImages() {
 	ImagesWrap.html('');
 	if (!ids.length || document.hidden) return;
 
-	fetch(`https://api.vk.com/method/photos.getById?photos=${ids.join(',')}&v=5.52&access_token=${TOKEN}&extended=0&photo_sizes=0`)
+	fetch(`https://api.vk.com/method/photos.getById?photos=${ids.join(',')}&v=5.52&access_token=${TOKEN}&extended=1&photo_sizes=0`)
 		.then(result => result.json())
-		.then(r => r.response.forEach(({id, owner_id, photo_75}) => {
-			ImagesWrap.append($(`<a href="photo${owner_id}_${id}"><img src="${photo_75}"/><b class="vkh-remove">╳</b></a>`));
+		.then(r => r.response.forEach(({id, owner_id, photo_75, likes}) => {
+			let thumb = $(`<a href="photo${owner_id}_${id}"><img src="${photo_75}"/><b class="vkh-remove">╳</b></a>`).appendTo(ImagesWrap);
+			if (likes && likes.count > LIKE_LIMIT) {
+				thumb.find('b').text(likes.count);
+				thumb.addClass('vkh-posted');
+			}
 		}));
 }
 
